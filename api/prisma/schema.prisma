@@ -1,0 +1,114 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Creator {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  name        String
+  username    String   @unique
+  telegramId  String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  groups        Group[]
+  transactions  Transaction[]
+  withdrawals   Withdrawal[]
+
+  @@map("creators")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  telegramId  String   @unique
+  inviteLink  String?
+  creatorId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator       Creator        @relation(fields: [creatorId], references: [id])
+  pricingPlans  PricingPlan[]
+  subscriptions Subscription[]
+
+  @@map("groups")
+}
+
+model PricingPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  duration    Int      // em dias
+  groupId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group         Group          @relation(fields: [groupId], references: [id])
+  subscriptions Subscription[]
+
+  @@map("pricing_plans")
+}
+
+model Subscription {
+  id            String    @id @default(cuid())
+  userId        String
+  groupId       String
+  planId        String
+  status        String    // active, expired, cancelled
+  startDate     DateTime
+  endDate       DateTime
+  stripeSessionId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  group         Group       @relation(fields: [groupId], references: [id])
+  plan          PricingPlan @relation(fields: [planId], references: [id])
+  transactions  Transaction[]
+
+  @@map("subscriptions")
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  creatorId      String
+  amount         Float
+  fee            Float    @default(0)
+  netAmount      Float
+  status         String   // pending, completed, failed
+  stripeSessionId String?
+  paymentMethod  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  creator        Creator      @relation(fields: [creatorId], references: [id])
+
+  @@map("transactions")
+}
+
+model Withdrawal {
+  id         String   @id @default(cuid())
+  creatorId  String
+  amount     Float
+  status     String   // pending, completed, rejected
+  pixKey     String?
+  bankData   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  creator    Creator  @relation(fields: [creatorId], references: [id])
+
+  @@map("withdrawals")
+}

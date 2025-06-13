@@ -1,0 +1,32 @@
+FROM node:18-alpine
+
+# Instalar dependências do sistema
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Criar diretório da aplicação
+WORKDIR /app
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm install
+
+# Instalar dependências globais para desenvolvimento
+RUN npm install -g nodemon prisma
+
+# Copiar código da aplicação
+COPY . .
+
+# Gerar Prisma Client
+RUN npx prisma generate
+
+# Expor porta
+EXPOSE 4000
+
+# Comando padrão (será sobrescrito no docker-compose)
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: televip_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: televip
+      POSTGRES_USER: televip_user
+      POSTGRES_PASSWORD: SuaSenhaSegura123!
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - televip_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U televip_user -d televip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Backend
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: televip_api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://televip_user:SuaSenhaSegura123!@postgres:5432/televip
+      - JWT_SECRET=televip_secret_key_2025
+      - PORT=4000
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - televip_network
+    command: npm run dev
+
+  # Frontend Web
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: televip_web
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:4000/api
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - televip_network
+    stdin_open: true
+    tty: true
+
+  # Bot Telegram
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile.dev
+    container_name: televip_bot
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://televip_user:SuaSenhaSegura123!@postgres:5432/televip
+      - BOT_TOKEN=${BOT_TOKEN}
+      - BOT_USERNAME=${BOT_USERNAME}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    volumes:
+      - ./bot:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - televip_network
+    command: npm run dev
+
+  # PgAdmin para gerenciar o banco (opcional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: televip_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@televip.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - televip_network
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  televip_network:
+    driver: bridge
