@@ -3,9 +3,18 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Interface para o usuário autenticado
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    email: string;
+  };
+}
+
 export const getDashboard = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.id;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user.id;
 
     // Buscar dados do criador
     const creator = await prisma.creator.findUnique({
@@ -45,16 +54,26 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Calcular estatísticas
-    const allSubscriptions = creator.groups.flatMap(group => group.subscriptions);
+    // Calcular estatísticas - correção do flatMap
+    const allSubscriptions: any[] = [];
+    creator.groups.forEach(group => {
+      group.subscriptions.forEach(subscription => {
+        allSubscriptions.push(subscription);
+      });
+    });
+    
     const activeSubscriptions = allSubscriptions.filter(sub => sub.status === 'active');
     
     const totalRevenue = creator.transactions.reduce((sum, transaction) => sum + transaction.netAmount, 0);
+    
+    // Calcular receita mensal
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
     const monthlyRevenue = creator.transactions
       .filter(t => {
-        const transactionMonth = new Date(t.createdAt).getMonth();
-        const currentMonth = new Date().getMonth();
-        return transactionMonth === currentMonth;
+        const transactionDate = new Date(t.createdAt);
+        return transactionDate.getMonth() === currentMonth && 
+               transactionDate.getFullYear() === currentYear;
       })
       .reduce((sum, transaction) => sum + transaction.netAmount, 0);
 
@@ -65,16 +84,18 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
     for (let i = 5; i >= 0; i--) {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
+      const targetMonth = date.getMonth();
+      const targetYear = date.getFullYear();
       const month = date.toLocaleDateString('pt-BR', { month: 'short' });
       
       const monthTransactions = creator.transactions.filter(t => {
         const tDate = new Date(t.createdAt);
-        return tDate.getMonth() === date.getMonth() && tDate.getFullYear() === date.getFullYear();
+        return tDate.getMonth() === targetMonth && tDate.getFullYear() === targetYear;
       });
       
       const monthSubscriptions = allSubscriptions.filter(s => {
         const sDate = new Date(s.createdAt);
-        return sDate.getMonth() === date.getMonth() && sDate.getFullYear() === date.getFullYear();
+        return sDate.getMonth() === targetMonth && sDate.getFullYear() === targetYear;
       });
 
       monthlyData.push({
@@ -127,7 +148,8 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
 
 export const requestWithdrawal = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req as any).user.id;
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user.id;
     const { amount, pixKey } = req.body;
 
     if (!amount || !pixKey) {

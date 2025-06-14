@@ -3,16 +3,25 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Interface para o usuário autenticado
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    email: string;
+  };
+}
+
 // Lista de admins autorizados (você pode expandir isso)
 const ADMIN_EMAILS = ['mauro_lcf@example.com', 'admin@televip.com'];
 
-const isAdmin = (email: string) => {
+const isAdmin = (email: string): boolean => {
   return ADMIN_EMAILS.includes(email);
 };
 
 export const getAdminDashboard = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userEmail = (req as any).user.email;
+    const authReq = req as AuthenticatedRequest;
+    const userEmail = authReq.user.email;
     
     if (!isAdmin(userEmail)) {
       res.status(403).json({
@@ -135,7 +144,8 @@ export const getAdminDashboard = async (req: Request, res: Response): Promise<vo
 
 export const getAllCreators = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userEmail = (req as any).user.email;
+    const authReq = req as AuthenticatedRequest;
+    const userEmail = authReq.user.email;
     
     if (!isAdmin(userEmail)) {
       res.status(403).json({
@@ -197,7 +207,8 @@ export const getAllCreators = async (req: Request, res: Response): Promise<void>
 
 export const getAllWithdrawals = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userEmail = (req as any).user.email;
+    const authReq = req as AuthenticatedRequest;
+    const userEmail = authReq.user.email;
     
     if (!isAdmin(userEmail)) {
       res.status(403).json({
@@ -237,7 +248,8 @@ export const getAllWithdrawals = async (req: Request, res: Response): Promise<vo
 
 export const updateWithdrawalStatus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userEmail = (req as any).user.email;
+    const authReq = req as AuthenticatedRequest;
+    const userEmail = authReq.user.email;
     
     if (!isAdmin(userEmail)) {
       res.status(403).json({
@@ -248,7 +260,7 @@ export const updateWithdrawalStatus = async (req: Request, res: Response): Promi
     }
 
     const { withdrawalId } = req.params;
-    const { status, adminNote } = req.body;
+    const { status } = req.body;
 
     if (!['completed', 'rejected'].includes(status)) {
       res.status(400).json({
